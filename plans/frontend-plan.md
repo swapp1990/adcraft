@@ -63,6 +63,8 @@ A single-page React + Vite application that guides users through an iterative ad
 - **Responsive layout** that works on mobile (375px+) and desktop
 - **Job history list** showing recent jobs with status, concept snippet, and video thumbnail
 - **Loading/empty states** for all views
+- **Playwright test suite** — local tests with mocked API + deployed smoke tests against `adcraft.swapp1990.org`
+- **Deployment** to `adcraft.swapp1990.org` (port 8008, nginx + certbot SSL, Docker)
 
 ### Should Have (P1)
 
@@ -82,7 +84,78 @@ A single-page React + Vite application that guides users through an iterative ad
 - Payment / usage limits
 - Backend changes (API is already complete)
 
-## 6. Risks & Mitigations
+## 6. Deployment
+
+**Domain:** `adcraft.swapp1990.org`
+**Server:** 64.225.33.214 (same DigitalOcean droplet as other swapp1990.org services)
+**Port:** 8008 (next available after resume-job-alerts on 8007)
+**Pattern:** Same as autonomous-writer (writer.swapp1990.org on port 8004)
+
+### Stack
+- Single Docker container running both FastAPI backend and Vite-built static frontend
+- FastAPI serves the React build from `/static` and the API from `/api/*`
+- Nginx reverse proxy on the server: `adcraft.swapp1990.org` → `127.0.0.1:8008`
+- SSL via Let's Encrypt (certbot, same as other subdomains)
+- systemd service: `adcraft.service`
+
+### Deploy Flow
+1. Push to `main` branch
+2. GitHub Actions builds Docker image → pushes to GHCR
+3. SSH to server → pull image → restart service
+4. Smoke test: `curl https://adcraft.swapp1990.org/health`
+
+## 7. Testing Strategy
+
+### Playwright Tests — Local (P0)
+
+Automated Playwright tests run against the local dev server (`localhost:5173` frontend + `localhost:8000` API). These run before every deploy to catch regressions.
+
+**Setup:**
+- Playwright config in `frontend/playwright.config.ts`
+- Test files in `frontend/tests/`
+- Backend API must be running locally (or use mock API server for fast tests)
+
+**Test suites:**
+
+| Suite | What it covers | Mock API? |
+|-------|---------------|-----------|
+| `smoke.spec.ts` | App loads, form renders, inputs work | Yes |
+| `generate.spec.ts` | Submit form → progress view → video player appears | Yes (mock job polling) |
+| `critique.spec.ts` | Critique button → loading → results card | Yes |
+| `history.spec.ts` | Job list renders, clicking loads results | Yes |
+| `responsive.spec.ts` | Mobile viewport (375px) — no scroll, inputs usable | Yes |
+| `e2e-real.spec.ts` | Full flow against real API (long-running, CI-optional) | No |
+
+**Run locally:**
+```
+cd frontend
+npx playwright test                    # All tests with mocked API
+npx playwright test --project=chromium # Single browser
+npx playwright test e2e-real.spec.ts   # Real API (slow, ~15 min)
+```
+
+### Playwright Tests — Deployed (P0)
+
+After deploy, a subset of Playwright tests run against the live `adcraft.swapp1990.org` to verify the deployment works. These are fast smoke tests only (no real video generation — too slow and expensive for CI).
+
+**Test suites (deployed):**
+
+| Suite | What it covers |
+|-------|---------------|
+| `deployed-smoke.spec.ts` | Site loads at `adcraft.swapp1990.org`, no console errors |
+| `deployed-health.spec.ts` | `/health` returns 200, `/api/jobs` returns 200 |
+| `deployed-form.spec.ts` | Form renders, inputs accept text, settings dropdowns work |
+| `deployed-history.spec.ts` | Job history loads (reads existing jobs from DB) |
+
+**Run against deployed site:**
+```
+cd frontend
+PLAYWRIGHT_BASE_URL=https://adcraft.swapp1990.org npx playwright test tests/deployed/
+```
+
+**CI integration:** GitHub Actions runs deployed tests after successful deploy step. Failures send a notification but don't roll back (manual intervention).
+
+## 8. Risks & Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
@@ -92,7 +165,7 @@ A single-page React + Vite application that guides users through an iterative ad
 | Mobile video playback quirks (autoplay blocked) | Med | Manual play button, test on iOS Safari and Chrome Android |
 | CORS issues between Vite dev server and FastAPI | Low | Add CORS middleware to FastAPI with localhost origins |
 
-## 7. Success Criteria Checklist
+## 9. Success Criteria Checklist
 
 ### Form & Input
 - [ ] Concept text area accepts input and has a character counter
@@ -132,12 +205,26 @@ A single-page React + Vite application that guides users through an iterative ad
 - [ ] No horizontal scroll on any viewport width
 - [ ] Touch targets are at least 44x44px on mobile
 
+### Playwright Tests — Local
+- [ ] `npx playwright test` runs all mock-API test suites and passes
+- [ ] Smoke tests verify app loads and form renders
+- [ ] Generate test verifies progress view and video player with mocked job
+- [ ] Critique test verifies score/weakness card with mocked critique response
+- [ ] Responsive test passes at 375px viewport (no horizontal scroll)
+- [ ] Tests run in under 60 seconds total (mocked API)
+
+### Playwright Tests — Deployed
+- [ ] Deployed smoke test confirms `adcraft.swapp1990.org` loads without console errors
+- [ ] Deployed health test confirms `/health` and `/api/jobs` return 200
+- [ ] Deployed form test confirms inputs render and accept text
+- [ ] Tests run via `PLAYWRIGHT_BASE_URL=https://adcraft.swapp1990.org npx playwright test tests/deployed/`
+
 ### No Regressions
 - [ ] Backend API still works via curl after adding CORS
 - [ ] GET /health returns healthy
 - [ ] Existing job data in MongoDB is still accessible
 
-## 8. End-to-End Test List
+## 10. End-to-End Test List
 
 **E2E-1: Happy path — Generate and watch**
 1. Open the app in a browser
@@ -177,7 +264,7 @@ A single-page React + Vite application that guides users through an iterative ad
 3. Verify: all inputs are tappable without zooming
 4. Verify: video player fits within viewport
 
-## 9. Manual Testing Checklist (Post-Deploy)
+## 11. Manual Testing Checklist (Post-Deploy)
 
 ### Quick Smoke Test (2 min)
 - [ ] App loads at root URL without errors
