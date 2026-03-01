@@ -87,6 +87,22 @@ async def fail_job(job_id: str, error: str):
     )
 
 
+async def cancel_job(job_id: str) -> bool:
+    """Cancel a pending or in_progress job. Returns True if cancelled."""
+    now = datetime.now(timezone.utc)
+    result = await _get_db().jobs.update_one(
+        {"_id": ObjectId(job_id), "status": {"$in": ["pending", "in_progress"]}},
+        {"$set": {"status": "cancelled", "error": "Cancelled by user", "completed_at": now, "updated_at": now}},
+    )
+    return result.modified_count > 0
+
+
+async def delete_job(job_id: str) -> bool:
+    """Delete a job from the database."""
+    result = await _get_db().jobs.delete_one({"_id": ObjectId(job_id)})
+    return result.deleted_count > 0
+
+
 def _serialize(doc: dict) -> dict:
     if not doc:
         return doc

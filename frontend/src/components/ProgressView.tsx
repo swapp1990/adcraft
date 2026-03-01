@@ -17,9 +17,10 @@ function getStageIndex(stage?: string): number {
 
 interface ProgressViewProps {
   job: Job;
+  onStop?: () => void;
 }
 
-export function ProgressView({ job }: ProgressViewProps) {
+export function ProgressView({ job, onStop }: ProgressViewProps) {
   const elapsed = useElapsed(job.started_at || job.created_at);
   const output = job.output as GenerateOutput | null;
   const currentStage = output?.stage;
@@ -37,8 +38,19 @@ export function ProgressView({ job }: ProgressViewProps) {
           <div className="w-3 h-3 bg-accent-500 rounded-full animate-pulse" />
           <h3 className="font-semibold text-slate-100">Generating your ad...</h3>
         </div>
-        <div className="text-sm text-slate-400 font-mono" data-testid="elapsed-time">
-          {elapsed}
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-400 font-mono" data-testid="elapsed-time">
+            {elapsed}
+          </span>
+          {onStop && (
+            <button
+              onClick={onStop}
+              className="text-xs px-3 py-1 rounded-full border border-red-500/40 text-red-400 hover:bg-red-500/10 transition-colors"
+              data-testid="stop-btn"
+            >
+              Stop
+            </button>
+          )}
         </div>
       </div>
 

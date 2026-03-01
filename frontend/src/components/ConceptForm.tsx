@@ -59,6 +59,23 @@ export function ConceptForm({
         <div className={`text-xs mt-1 text-right ${remaining < 50 ? 'text-amber-400' : 'text-slate-500'}`}>
           {remaining} characters remaining
         </div>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {[
+            'Ember Roast — premium dark roast coffee for adventurers',
+            'ZenFit — minimalist home workout app for busy professionals',
+            'Paws & Play — eco-friendly dog toys made from recycled ocean plastic',
+          ].map((example) => (
+            <button
+              key={example}
+              type="button"
+              className="text-xs px-3 py-1.5 rounded-full border border-slate-600 text-slate-400 hover:border-accent-400 hover:text-accent-400 transition-colors"
+              onClick={() => setConcept(example)}
+              disabled={isSubmitting}
+            >
+              {example.split('—')[0].trim()}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Settings grid */}

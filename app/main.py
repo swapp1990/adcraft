@@ -93,6 +93,24 @@ async def list_jobs(job_type: Optional[str] = None, limit: int = 20):
     return await jobs.list_jobs(job_type, limit)
 
 
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a pending or in-progress job."""
+    cancelled = await jobs.cancel_job(job_id)
+    if not cancelled:
+        raise HTTPException(status_code=400, detail="Job cannot be cancelled (already completed or not found)")
+    return {"status": "cancelled", "id": job_id}
+
+
+@app.delete("/api/jobs/{job_id}")
+async def delete_job(job_id: str):
+    """Delete a job."""
+    deleted = await jobs.delete_job(job_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "deleted", "id": job_id}
+
+
 # ── Static frontend (production) ──────────────────────────────────────
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 

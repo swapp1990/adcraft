@@ -31,6 +31,12 @@ export const api = {
     return request(`/api/jobs?${params}`);
   },
 
+  cancelJob: (jobId: string): Promise<{ status: string; id: string }> =>
+    request(`/api/jobs/${jobId}/cancel`, { method: 'POST' }),
+
+  deleteJob: (jobId: string): Promise<{ status: string; id: string }> =>
+    request(`/api/jobs/${jobId}`, { method: 'DELETE' }),
+
   health: (): Promise<{ status: string }> =>
     request('/health'),
 };

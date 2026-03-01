@@ -142,6 +142,35 @@ export default function App() {
     setSelectedHistoryJob(null);
   }, []);
 
+  const handleStop = useCallback(async () => {
+    const jobId = generateJobId || critiqueJobId;
+    if (!jobId) return;
+    try {
+      await api.cancelJob(jobId);
+    } catch {
+      // Job may have already completed
+    }
+    setMode('idle');
+    setGenerateJobId(null);
+    setCritiqueJobId(null);
+    setActiveGenerateJob(null);
+    setActiveCritiqueJob(null);
+    setErrorMsg('');
+    loadHistory();
+  }, [generateJobId, critiqueJobId, loadHistory]);
+
+  const handleDeleteJob = useCallback(async (jobId: string) => {
+    try {
+      await api.deleteJob(jobId);
+      setHistoryJobs((prev) => prev.filter((j) => j.id !== jobId));
+      if (selectedHistoryJob?.id === jobId) {
+        setSelectedHistoryJob(null);
+      }
+    } catch {
+      // Non-critical
+    }
+  }, [selectedHistoryJob]);
+
   const handleSelectHistoryJob = useCallback((job: Job) => {
     setSelectedHistoryJob(job);
     setGenerateJobId(null);
@@ -210,7 +239,7 @@ export default function App() {
 
             {/* Progress view (while generating) */}
             {mode === 'generating' && activeGenerateJob && (
-              <ProgressView job={activeGenerateJob} />
+              <ProgressView job={activeGenerateJob} onStop={handleStop} />
             )}
 
             {/* Waiting to get job ID */}
@@ -314,6 +343,7 @@ export default function App() {
               activeCritiqueJob?.id
             }
             onSelectJob={handleSelectHistoryJob}
+            onDeleteJob={handleDeleteJob}
             isLoading={historyLoading}
           />
         </div>

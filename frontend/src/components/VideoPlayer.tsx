@@ -61,9 +61,9 @@ export function VideoPlayer({ job, onCritique, isCritiquing }: VideoPlayerProps)
           <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-200 transition-colors select-none">
             View script
           </summary>
-          <div className="mt-3 p-4 bg-navy-700 rounded-xl text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border border-navy-500">
-            {output.script}
-          </div>
+          <pre className="mt-3 p-4 bg-navy-700 rounded-xl text-sm text-slate-300 leading-relaxed whitespace-pre-wrap border border-navy-500 overflow-x-auto">
+            {typeof output.script === 'string' ? output.script : JSON.stringify(output.script, null, 2)}
+          </pre>
         </details>
       )}
 
@@ -73,9 +73,9 @@ export function VideoPlayer({ job, onCritique, isCritiquing }: VideoPlayerProps)
           <summary className="text-sm text-slate-400 cursor-pointer hover:text-slate-200 transition-colors select-none">
             Edit notes
           </summary>
-          <div className="mt-3 p-4 bg-navy-700 rounded-xl text-sm text-slate-300 leading-relaxed border border-navy-500">
-            {output.edit_notes}
-          </div>
+          <pre className="mt-3 p-4 bg-navy-700 rounded-xl text-sm text-slate-300 leading-relaxed border border-navy-500 whitespace-pre-wrap overflow-x-auto">
+            {typeof output.edit_notes === 'string' ? output.edit_notes : JSON.stringify(output.edit_notes, null, 2)}
+          </pre>
         </details>
       )}
 
