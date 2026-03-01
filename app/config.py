@@ -11,6 +11,7 @@ DB_NAME = "adcraft"
 # Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview")
+GEMINI_IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.0-flash-exp")
 
 # xAI / Grok
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")

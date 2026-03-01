@@ -1,11 +1,11 @@
-"""ffmpeg video assembly — trim, strip audio, crossfade transitions."""
+"""ffmpeg video assembly — trim, strip audio, crossfade transitions, image-to-video."""
 import os
 import asyncio
 import logging
 import shutil
 import subprocess
 import tempfile
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from . import config
 
@@ -25,6 +25,97 @@ async def _probe_duration(path: str) -> float:
         return float(result.stdout.decode().strip())
     except (ValueError, AttributeError):
         return 5.0
+
+
+async def image_to_video(
+    image_bytes: bytes,
+    duration: float = 4.0,
+    fps: int = 24,
+) -> Tuple[bytes, float]:
+    """
+    Convert a still image to a video clip with a subtle Ken Burns zoom effect.
+
+    The output uses libx264 / yuv420p / 24fps to match all other clips in the
+    pipeline so they can be assembled without codec mismatches.
+
+    Args:
+        image_bytes: Raw bytes of a PNG or JPEG image.
+        duration: Desired clip duration in seconds.
+        fps: Frames per second (default 24).
+
+    Returns:
+        Tuple of (video_bytes, actual_duration).
+    """
+    tmpdir = tempfile.mkdtemp(prefix="adcraft_img2vid_")
+    try:
+        # Detect format from magic bytes (PNG starts with \x89PNG; JPEG with \xff\xd8)
+        ext = "png" if image_bytes[:4] == b"\x89PNG" else "jpg"
+        img_path = os.path.join(tmpdir, f"frame.{ext}")
+        out_path = os.path.join(tmpdir, "clip.mp4")
+
+        with open(img_path, "wb") as f:
+            f.write(image_bytes)
+
+        total_frames = int(duration * fps)
+
+        # Ken Burns: slow zoom from 1.0x to 1.05x over the clip duration.
+        # zoompan filter: zoom expression linearly goes from 1 to 1.05 over
+        # total_frames frames. x/y keep the image centred.
+        zoom_expr = f"'min(zoom+{0.05 / total_frames:.6f},1.05)'"
+        ken_burns = (
+            f"zoompan=z={zoom_expr}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            f":d={total_frames}:s=854x480:fps={fps}"
+        )
+
+        result = await _run([
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-i", img_path,
+            "-vf", ken_burns,
+            "-t", str(duration),
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-pix_fmt", "yuv420p",
+            "-r", str(fps),
+            out_path,
+        ], timeout=120)
+
+        if result.returncode != 0:
+            logger.warning(
+                f"Ken Burns zoompan failed (stderr: {result.stderr.decode()[:300]}), "
+                "falling back to simple loop encode"
+            )
+            # Fallback: plain still-image loop without zoom
+            result = await _run([
+                "ffmpeg", "-y",
+                "-loop", "1",
+                "-i", img_path,
+                "-t", str(duration),
+                "-vf", "scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2",
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-pix_fmt", "yuv420p",
+                "-r", str(fps),
+                out_path,
+            ], timeout=120)
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"image_to_video failed: {result.stderr.decode()[:500]}"
+                )
+
+        actual_duration = await _probe_duration(out_path)
+        with open(out_path, "rb") as f:
+            video_bytes = f.read()
+
+        logger.info(
+            f"image_to_video: {len(image_bytes)} bytes image -> "
+            f"{len(video_bytes)} bytes video ({actual_duration:.1f}s)"
+        )
+        return video_bytes, actual_duration
+
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 async def assemble(
