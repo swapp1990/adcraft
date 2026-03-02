@@ -1,10 +1,10 @@
 """Gemini image generation — generate still frames for intro/product/CTA clips.
 
 Two strategies are attempted in order:
-1. generate_content with response_modalities=["IMAGE"] — works with gemini-2.0-flash-exp.
+1. generate_content with response_modalities=["IMAGE"] — works with gemini-3-pro-image-preview.
 2. generate_images (Imagen 3) — uses GenerateImagesConfig with native aspect_ratio support.
 
-Strategy 1 is tried first because gemini-2.0-flash-exp is configured as GEMINI_IMAGE_MODEL.
+Strategy 1 is tried first because gemini-3-pro-image-preview is configured as GEMINI_IMAGE_MODEL.
 If it returns no image data (model may not support image output in all API versions),
 strategy 2 falls back to imagen-3.0-generate-002.
 """
@@ -119,7 +119,7 @@ async def generate_image(
     """
     Generate a still image via Gemini image generation, upload to S3, and return both.
 
-    Tries gemini-2.0-flash-exp via generate_content first.
+    Tries gemini-3-pro-image-preview via generate_content first.
     Falls back to Imagen 3 (imagen-3.0-generate-002) via generate_images.
 
     Args:
@@ -141,7 +141,7 @@ async def generate_image(
 
     image_bytes: Optional[bytes] = None
 
-    # Strategy 1: gemini-2.0-flash-exp via generate_content + response_modalities
+    # Strategy 1: gemini-3-pro-image-preview via generate_content + response_modalities
     try:
         image_bytes = await _generate_via_generate_content(prompt, ar)
     except Exception as e:
