@@ -139,18 +139,34 @@ async def generate_image(
     }
     ar = _aspect_map.get(aspect_ratio, "16:9")
 
+    # Enhance prompt with quality boosters and aspect ratio context
+    orientation = {
+        "9:16": "vertical/portrait format (phone screen)",
+        "16:9": "horizontal/landscape widescreen format",
+        "1:1": "square format",
+        "4:3": "standard 4:3 format",
+        "3:4": "portrait 3:4 format",
+    }.get(ar, "widescreen format")
+
+    enhanced_prompt = (
+        f"Professional high-quality advertisement image in {orientation}. "
+        f"{prompt} "
+        f"Style: polished commercial photography, vibrant colours, "
+        f"sharp details, professional lighting, suitable for a video ad frame."
+    )
+
     image_bytes: Optional[bytes] = None
 
     # Strategy 1: gemini-3-pro-image-preview via generate_content + response_modalities
     try:
-        image_bytes = await _generate_via_generate_content(prompt, ar)
+        image_bytes = await _generate_via_generate_content(enhanced_prompt, ar)
     except Exception as e:
         logger.warning(f"generate_content image generation failed: {e}")
 
     # Strategy 2: Imagen 3 via generate_images
     if image_bytes is None:
         logger.info("Falling back to Imagen 3 (generate_images)")
-        image_bytes = await _generate_via_imagen(prompt, ar)
+        image_bytes = await _generate_via_imagen(enhanced_prompt, ar)
 
     # Detect mime type from magic bytes
     if image_bytes[:4] == b"\x89PNG":

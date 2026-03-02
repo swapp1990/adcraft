@@ -154,8 +154,8 @@ SCENES:
 For each scene, write a prompt tuned to its METHOD:
 
 METHOD GUIDELINES:
-- image_static: Write a still image composition prompt. Focus on layout, typography placement, brand colours, graphic design quality, and readability. The output is a single composed frame — no motion language. Mention any text/brand name that should appear as part of the composition.
-- image_animate: Write a still image prompt that captures the ideal starting frame for an animation. The frame should have strong visual interest and imply the motion that will follow. Include a brief "animation_direction" hint (e.g. "slow zoom in", "gentle pan left") as a separate field.
+- image_static: Write a highly detailed still image composition prompt for a professional advertisement. Include: specific colour palette (hex or descriptive), lighting direction and quality (e.g. "warm golden backlight", "soft studio lighting"), texture and material details, background treatment (gradient, bokeh, environment), precise text placement and styling (e.g. "bold white sans-serif headline centered upper third"), and overall mood. Think like a graphic designer creating a hero banner or social media ad card. The result should look like a polished ad frame, NOT a generic stock photo.
+- image_animate: Write a detailed still image prompt that captures a visually striking starting frame for animation. Include rich visual details: lighting, depth of field, colour grading, material textures. The composition should have clear foreground/background separation to animate well. Include a brief "animation_direction" hint (e.g. "slow zoom in on product", "gentle parallax pan left") as a separate field.
 - direct_video: Write a video generation prompt with camera movement hints (slow pan, close-up, wide shot), lighting, colour mood, and motion. Optimized for {aspect_ratio} aspect ratio. Avoid text or words.
 
 IMPORTANT: The "duration" values across ALL clips MUST sum to exactly {target_duration} seconds. Average ~{per_clip_avg:.0f}s per clip.
@@ -198,6 +198,10 @@ Always include "type" and "method" fields — copy them from the scene."""
         if "method" not in cp:
             cp["method"] = scene.get("method", "direct_video")
 
+    # Force user's aspect ratio on all clips (don't rely on LLM)
+    for cp in clip_prompts:
+        cp["aspect_ratio"] = aspect_ratio
+
     # Normalize durations to sum to target_duration
     if clip_prompts:
         total = sum(float(cp.get("duration", per_clip_avg)) for cp in clip_prompts)
@@ -211,6 +215,7 @@ Always include "type" and "method" fields — copy them from the scene."""
 
     logger.info(
         f"Created {len(clip_prompts)} clip prompts, "
+        f"aspect_ratio={aspect_ratio}, "
         f"total duration: {sum(cp.get('duration', 0) for cp in clip_prompts)}s"
     )
     return clip_prompts
@@ -233,14 +238,16 @@ async def generate_clips(
 
     async def _gen_image_static(cp: dict, index: int) -> dict:
         """Still image -> ffmpeg padded video clip."""
+        ar = cp.get("aspect_ratio", config.DEFAULT_ASPECT_RATIO)
         image_bytes, image_url = await image_gen.generate_image(
             prompt=cp["prompt"],
-            aspect_ratio=cp.get("aspect_ratio", config.DEFAULT_ASPECT_RATIO),
+            aspect_ratio=ar,
         )
         duration = float(cp.get("duration", 4))
         video_bytes, actual_duration = await ffmpeg.image_to_video(
             image_bytes=image_bytes,
             duration=duration,
+            aspect_ratio=ar,
         )
         s3_url = await storage.upload(video_bytes, f"clip_{index}.mp4")
         logger.info(f"Clip {index} (image_static) uploaded: {len(video_bytes)} bytes")
@@ -255,9 +262,10 @@ async def generate_clips(
 
     async def _gen_image_animate(cp: dict, index: int) -> dict:
         """Still image -> Grok image-to-video. Falls back to image_static on error."""
+        ar = cp.get("aspect_ratio", config.DEFAULT_ASPECT_RATIO)
         image_bytes, image_url = await image_gen.generate_image(
             prompt=cp["prompt"],
-            aspect_ratio=cp.get("aspect_ratio", config.DEFAULT_ASPECT_RATIO),
+            aspect_ratio=ar,
         )
         duration = int(cp.get("duration", 5))
 
@@ -272,7 +280,7 @@ async def generate_clips(
                 image_url=image_url,
                 prompt=anim_prompt,
                 duration=duration,
-                aspect_ratio=cp.get("aspect_ratio", config.DEFAULT_ASPECT_RATIO),
+                aspect_ratio=ar,
                 resolution=resolution,
             )
             s3_url = await storage.upload(video_bytes, f"clip_{index}.mp4")
@@ -292,6 +300,7 @@ async def generate_clips(
             video_bytes, actual_duration = await ffmpeg.image_to_video(
                 image_bytes=image_bytes,
                 duration=float(duration),
+                aspect_ratio=ar,
             )
             s3_url = await storage.upload(video_bytes, f"clip_{index}.mp4")
             logger.info(

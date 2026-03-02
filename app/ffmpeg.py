@@ -27,10 +27,23 @@ async def _probe_duration(path: str) -> float:
         return 5.0
 
 
+def _resolution_for_aspect(aspect_ratio: str) -> Tuple[int, int]:
+    """Return (width, height) for a given aspect ratio at 480p-class resolution."""
+    mapping = {
+        "16:9": (854, 480),
+        "9:16": (480, 854),
+        "1:1": (480, 480),
+        "4:3": (640, 480),
+        "3:4": (480, 640),
+    }
+    return mapping.get(aspect_ratio, (854, 480))
+
+
 async def image_to_video(
     image_bytes: bytes,
     duration: float = 4.0,
     fps: int = 24,
+    aspect_ratio: str = "16:9",
 ) -> Tuple[bytes, float]:
     """
     Convert a still image to a video clip with a subtle Ken Burns zoom effect.
@@ -42,10 +55,14 @@ async def image_to_video(
         image_bytes: Raw bytes of a PNG or JPEG image.
         duration: Desired clip duration in seconds.
         fps: Frames per second (default 24).
+        aspect_ratio: Aspect ratio string (e.g. "16:9", "9:16").
 
     Returns:
         Tuple of (video_bytes, actual_duration).
     """
+    w, h = _resolution_for_aspect(aspect_ratio)
+    size_str = f"{w}x{h}"
+
     tmpdir = tempfile.mkdtemp(prefix="adcraft_img2vid_")
     try:
         # Detect format from magic bytes (PNG starts with \x89PNG; JPEG with \xff\xd8)
@@ -64,7 +81,7 @@ async def image_to_video(
         zoom_expr = f"'min(zoom+{0.05 / total_frames:.6f},1.05)'"
         ken_burns = (
             f"zoompan=z={zoom_expr}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-            f":d={total_frames}:s=854x480:fps={fps}"
+            f":d={total_frames}:s={size_str}:fps={fps}"
         )
 
         result = await _run([
@@ -91,7 +108,7 @@ async def image_to_video(
                 "-loop", "1",
                 "-i", img_path,
                 "-t", str(duration),
-                "-vf", "scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2",
+                "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad={w}:{h}:(ow-iw)/2:(oh-ih)/2",
                 "-c:v", "libx264",
                 "-preset", "fast",
                 "-pix_fmt", "yuv420p",
