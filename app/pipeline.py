@@ -403,7 +403,6 @@ Review the clip and provide edit notes as JSON:
   "matches_scene": true/false,
   "trim_start": 0.0,
   "trim_end": {clip.get('duration', 6)},
-  "suggested_order": {clip['index'] + 1},
   "transition_to_next": "crossfade",
   "notes": "Brief assessment"
 }}
@@ -417,6 +416,8 @@ Be concise. Trim to keep only the best portion."""
                 system_prompt=system_prompt,
             )
             note = _parse_json(response.content)
+            # Always use the actual clip index, not whatever Gemini returns
+            note["clip_index"] = clip["index"]
             edit_notes.append(note)
             logger.info(f"Clip {clip['index']} analyzed: {note.get('quality')}")
         except Exception as e:
@@ -426,12 +427,12 @@ Be concise. Trim to keep only the best portion."""
                 "quality": "acceptable",
                 "trim_start": 0,
                 "trim_end": clip.get("duration", 6),
-                "suggested_order": clip["index"] + 1,
                 "transition_to_next": "crossfade",
                 "notes": f"Analysis failed ({type(e).__name__}), using as-is",
             })
 
-    edit_notes.sort(key=lambda n: n.get("suggested_order", n.get("clip_index", 0)))
+    # Keep original script order — intro must stay first, CTA must stay last
+    edit_notes.sort(key=lambda n: n["clip_index"])
     return edit_notes
 
 

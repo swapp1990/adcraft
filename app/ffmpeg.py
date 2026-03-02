@@ -152,11 +152,8 @@ async def assemble(
     clip_map = {c["index"]: c for c in clips}
     note_map = {n.get("clip_index", i): n for i, n in enumerate(edit_notes)}
 
-    # Determine clip order from edit_notes
-    ordered = [n.get("clip_index", 0) for n in edit_notes if n.get("clip_index", 0) in clip_map]
-    for c in clips:
-        if c["index"] not in ordered:
-            ordered.append(c["index"])
+    # Use original clip index order (script structure defines the sequence)
+    ordered = sorted(clip_map.keys())
 
     tmpdir = tempfile.mkdtemp(prefix="adcraft_")
 
