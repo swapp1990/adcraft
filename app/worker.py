@@ -23,7 +23,7 @@ async def process_generate(job: dict):
     script = await pipeline.generate_script(concept, num_clips, target_duration)
 
     # Stage 2
-    clip_prompts = await pipeline.create_clip_prompts(script, aspect_ratio)
+    clip_prompts = await pipeline.create_clip_prompts(script, aspect_ratio, target_duration)
 
     # Stage 3
     clips, failed = await pipeline.generate_clips(clip_prompts, resolution)

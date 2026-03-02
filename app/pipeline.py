@@ -126,7 +126,9 @@ Respond with this exact JSON structure:
     return script
 
 
-async def create_clip_prompts(script: dict, aspect_ratio: str) -> list:
+async def create_clip_prompts(
+    script: dict, aspect_ratio: str, target_duration: int = 30
+) -> list:
     """Stage 2: Convert scenes to method-optimized prompts.
 
     Prompts are tuned differently per method:
@@ -135,13 +137,17 @@ async def create_clip_prompts(script: dict, aspect_ratio: str) -> list:
     - direct_video: camera movement, motion, cinematic flow (unchanged from v1)
 
     The type and method fields are passed through to Stage 3.
+    After LLM generation, durations are normalized to sum to target_duration.
     """
     scenes = script.get("scenes", [])
     logger.info(f"Creating {len(scenes)} clip prompts...")
 
+    per_clip_avg = target_duration / max(len(scenes), 1)
+
     prompt = f"""Convert these ad scenes into generation prompts optimized for each scene's method.
 
 AD TONE: {script.get('tone', 'cinematic')}
+TARGET TOTAL DURATION: {target_duration} seconds (allocate durations so they sum to exactly {target_duration}s)
 SCENES:
 {json.dumps(scenes, indent=2)}
 
@@ -152,6 +158,8 @@ METHOD GUIDELINES:
 - image_animate: Write a still image prompt that captures the ideal starting frame for an animation. The frame should have strong visual interest and imply the motion that will follow. Include a brief "animation_direction" hint (e.g. "slow zoom in", "gentle pan left") as a separate field.
 - direct_video: Write a video generation prompt with camera movement hints (slow pan, close-up, wide shot), lighting, colour mood, and motion. Optimized for {aspect_ratio} aspect ratio. Avoid text or words.
 
+IMPORTANT: The "duration" values across ALL clips MUST sum to exactly {target_duration} seconds. Average ~{per_clip_avg:.0f}s per clip.
+
 Respond with this exact JSON:
 {{
   "clip_prompts": [
@@ -161,7 +169,7 @@ Respond with this exact JSON:
       "method": "image_static",
       "prompt": "Detailed prompt appropriate for the method...",
       "animation_direction": "slow zoom in",
-      "duration": 4,
+      "duration": {per_clip_avg:.0f},
       "aspect_ratio": "{aspect_ratio}"
     }}
   ]
@@ -190,7 +198,21 @@ Always include "type" and "method" fields — copy them from the scene."""
         if "method" not in cp:
             cp["method"] = scene.get("method", "direct_video")
 
-    logger.info(f"Created {len(clip_prompts)} clip prompts")
+    # Normalize durations to sum to target_duration
+    if clip_prompts:
+        total = sum(float(cp.get("duration", per_clip_avg)) for cp in clip_prompts)
+        if total > 0 and abs(total - target_duration) > 1:
+            scale = target_duration / total
+            for cp in clip_prompts:
+                cp["duration"] = round(float(cp.get("duration", per_clip_avg)) * scale)
+            # Fix rounding: adjust last clip to hit exact target
+            adjusted_total = sum(cp["duration"] for cp in clip_prompts)
+            clip_prompts[-1]["duration"] += target_duration - adjusted_total
+
+    logger.info(
+        f"Created {len(clip_prompts)} clip prompts, "
+        f"total duration: {sum(cp.get('duration', 0) for cp in clip_prompts)}s"
+    )
     return clip_prompts
 
 
